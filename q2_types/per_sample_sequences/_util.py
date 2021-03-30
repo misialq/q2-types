@@ -227,6 +227,36 @@ def _copy_with_compression(src, dst):
     qiime2.util.duplicate(src, dst)
 
 
+def _parse_mag_filename(path):
+    filename = str(path).replace('.fasta', '')
+    sample_id, mag_id, = filename.rsplit('/', maxsplit=3)
+    return sample_id, mag_id
+
+
+def _test_mag_helper(dirfmt, output_cls, manifest_fmt,
+                     fastq_fmt):
+    result = output_cls()
+    manifest = manifest_fmt()
+    manifest_fh = manifest.open()
+    manifest_fh.write('sample-id,mag-id,filename\n')
+    for path, view in dirfmt.sequences.iter_views(fastq_fmt):
+        sample_id, mag_id = _parse_mag_filename(path)
+        result.sequences.write_data(view, fastq_fmt,
+                                    sample_id=sample_id,
+                                    mag_id=mag_id)
+
+        filepath = result.sequences.path_maker(sample_id=sample_id,
+                                               mag_id=mag_id)
+        name = f"{filepath.parent.name}/{filepath.name}"
+
+        manifest_fh.write('%s,%s,%s\n' % (sample_id, mag_id, name))
+
+    manifest_fh.close()
+    result.manifest.write_data(manifest, manifest_fmt)
+
+    return result
+
+
 def _fastq_manifest_helper(fmt, fastq_copy_fn, single_end, se_fmt, pe_fmt,
                            abs_manifest_fmt, manifest_fmt, yaml_fmt):
     direction_to_read_number = {'forward': 1, 'reverse': 2}

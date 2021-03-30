@@ -14,6 +14,10 @@ import skbio
 import yaml
 import pandas as pd
 import qiime2.util
+from q2_types.per_sample_sequences._format import (TestMultiDirFmtBase,
+                                                   TestMultiDirFmt,
+                                                   MultiMAGManifestFormat,
+                                                   MAGFASTAFormat)
 
 from ..plugin_setup import plugin
 from . import (
@@ -44,7 +48,7 @@ from ._util import (
     _phred64_warning,
     _write_phred64_to_phred33,
     _manifest_v2_to_v1,
-    _manifest_to_df,
+    _manifest_to_df, _test_mag_helper,
 )
 
 
@@ -80,6 +84,13 @@ _dirfmt_to_casava_partial = functools.partial(
     fastq_fmt=FastqGzFormat,
     casava_fmt=CasavaOneEightSingleLanePerSampleDirFmt,
 )
+
+
+@plugin.register_transformer
+def _3_123(dirfmt: TestMultiDirFmtBase) \
+        -> TestMultiDirFmt:
+    return _test_mag_helper(
+        dirfmt, TestMultiDirFmt, MultiMAGManifestFormat, MAGFASTAFormat)
 
 
 @plugin.register_transformer

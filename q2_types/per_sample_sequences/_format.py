@@ -100,6 +100,14 @@ class PairedEndFastqManifestPhred64V2(_PairedEndFastqManifestV2):
     pass
 
 
+class TestManifestFormat(model.TextFileFormat):
+    EXPECTED_HEADER = None
+    PATH_HEADER_LABEL = None
+
+    def _check_n_records(self, root, n=None):
+        pass
+
+
 class _FastqManifestBase(model.TextFileFormat):
     """
     Base class for mapping of sample identifiers to filepaths and read
@@ -282,6 +290,70 @@ class FastqGzFormat(model.BinaryFileFormat):
 
         record_count_map = {'min': 5, 'max': None}
         self._check_n_records(record_count_map[level])
+
+
+def _parse_test_multi_filename(path, parse_lane=True):
+    filename = str(path).replace('.fasta', '')
+    sample_id, mag_id = filename.rsplit('_', maxsplit=3)
+    return sample_id, mag_id
+
+
+class MAGFASTAFormat(model.TextFileFormat):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.aligned = False
+        self.alphabet = None
+
+    def _validate_(self, level):
+        pass
+
+
+class MultiMAGManifestFormat(TestManifestFormat):
+    """
+    Mapping of sample identifiers to relative filepaths and read direction.
+
+    """
+    EXPECTED_HEADER = ['sample-id', 'mag-id', 'filename']
+    PATH_HEADER_LABEL = 'filename'
+
+    def _validate_(self, level):
+        self._check_n_records(root=str(self.path.parent),
+                              n={'min': 10, 'max': None}[level])
+
+
+class TestMultiDirFmtBase(model.DirectoryFormat):
+    sequences = model.FileCollection(r'.+\/.+\.fasta', format=MAGFASTAFormat)
+
+    @sequences.set_path_maker
+    def sequences_path_maker(self, sample_id, mag_id):
+        return '%s/%s.fasta' % (sample_id, mag_id)
+
+    @property
+    def manifest(self):
+        tmp_manifest = FastqManifestFormat()
+        with tmp_manifest.open() as fh:
+            fh.write('sample-id,mag-id,filename\n')
+            for fp, _ in self.sequences.iter_views(FastqGzFormat):
+                sample_id, mag_id = _parse_test_multi_filename(fp)
+                fh.write('%s,%s,%s\n' % (sample_id, mag_id, fp.name))
+
+        return _manifest_to_df(tmp_manifest, self.path.parent)
+
+    def _validate_(self, level):
+        pass
+        # for p in self.path.iterdir():
+        #     if p.is_dir():
+        #         # This branch happens if you have a filepath that looks roughly
+        #         # like: Human_Kneecap/S1_L001_R1_001.fastq.gz
+        #         # This technically matches the regex. It's easier to just
+        #         # check that there aren't any directories, than making a very
+        #         # complicated regex. This also produces a nicer error anyways.
+        #         d = p.relative_to(self.path)
+        #         raise ValidationError("Contains a subdirectory: %s" % d)
+
+
+class TestMultiDirFmt(TestMultiDirFmtBase):
+    manifest = model.File('MANIFEST', format=MultiMAGManifestFormat)
 
 
 class CasavaOneEightSingleLanePerSampleDirFmt(model.DirectoryFormat):
@@ -491,7 +563,7 @@ QIIME1DemuxDirFmt = model.SingleFileDirectoryFormat(
 
 
 plugin.register_formats(
-    FastqManifestFormat, YamlFormat, FastqGzFormat,
+    FastqManifestFormat, YamlFormat, FastqGzFormat, TestMultiDirFmt,
     CasavaOneEightSingleLanePerSampleDirFmt,
     CasavaOneEightLanelessPerSampleDirFmt,
     _SingleLanePerSampleFastqDirFmt, SingleLanePerSampleSingleEndFastqDirFmt,
@@ -499,5 +571,5 @@ plugin.register_formats(
     SingleEndFastqManifestPhred64, PairedEndFastqManifestPhred33,
     PairedEndFastqManifestPhred64, SingleEndFastqManifestPhred33V2,
     SingleEndFastqManifestPhred64V2, PairedEndFastqManifestPhred33V2,
-    PairedEndFastqManifestPhred64V2, QIIME1DemuxFormat, QIIME1DemuxDirFmt
+    PairedEndFastqManifestPhred64V2, QIIME1DemuxFormat, QIIME1DemuxDirFmt, TestMultiDirFmtBase
 )
