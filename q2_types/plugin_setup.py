@@ -19,7 +19,11 @@ import q2_types
 from q2_types import __version__
 
 from q2_types.feature_data_mag import MAG
-from q2_types.per_sample_sequences import MAGs
+import q2_types.kraken2
+from q2_types.per_sample_sequences import (MAGs,
+                                           JoinedSequencesWithQuality,
+                                           SequencesWithQuality,
+                                           PairedEndSequencesWithQuality)
 from q2_types.feature_data import FeatureData
 from q2_types.genome_data import Orthologs, GenomeData, NOG, Loci
 from q2_types.genome_data._methods import collate_loci
@@ -57,6 +61,60 @@ plugin.methods.register_function(
     description="Partition a SampleData[MAGs] artifact into smaller "
                 "artifacts containing subsets of the MAGs",
 )
+demux_param_descriptions = {
+    'demux_description': 'The demultiplexed sequences to partition.',
+    'num_partitions': 'The number of partitions to split the'
+                      ' demultiplexed sequences into. Defaults to'
+                      ' partitioning into individual samples.',
+    'partitioned_demux': 'The partitioned demultiplexed sequences.',
+    'name': 'Split demultiplexed sequence data into partitions.'
+}
+
+T = qiime2.plugin.TypeMatch([SequencesWithQuality, JoinedSequencesWithQuality])
+plugin.methods.register_function(
+    function=q2_types.per_sample_sequences.partition_samples_single,
+    inputs={'demux': SampleData[T]},
+    parameters={'num_partitions': Int % Range(1, None)},
+    outputs=[
+        ('partitioned_demux', Collection[SampleData[T]]),
+    ],
+    input_descriptions={
+        'demux': demux_param_descriptions['demux_description']
+    },
+    parameter_descriptions={
+        'num_partitions':  demux_param_descriptions['num_partitions']
+    },
+    output_descriptions={
+        'partitioned_demux': demux_param_descriptions['partitioned_demux']
+    },
+    name=demux_param_descriptions['name'],
+    description=('Partition demultiplexed single end or joined '
+                 'sequences into individual samples or the number of '
+                 'partitions specified.'),
+)
+
+plugin.methods.register_function(
+    function=q2_types.per_sample_sequences.partition_samples_paired,
+    inputs={'demux': SampleData[PairedEndSequencesWithQuality]},
+    parameters={'num_partitions': Int % Range(1, None)},
+    outputs=[
+        ('partitioned_demux',
+         Collection[SampleData[PairedEndSequencesWithQuality]]),
+    ],
+    input_descriptions={
+        'demux': demux_param_descriptions['demux_description']
+    },
+    parameter_descriptions={
+        'num_partitions': demux_param_descriptions['num_partitions']
+    },
+    output_descriptions={
+        'partitioned_demux': demux_param_descriptions['partitioned_demux']
+    },
+    name=demux_param_descriptions['name'],
+    description=('Partition demultiplexed paired end sequences into '
+                 'individual samples or the number of partitions specified.'),
+)
+
 
 plugin.methods.register_function(
     function=q2_types.genome_data.partition_orthologs,

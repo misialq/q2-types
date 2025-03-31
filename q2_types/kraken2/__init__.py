@@ -15,9 +15,9 @@ from ._formats import (
 from ._types import (
     Kraken2Reports, Kraken2Outputs, Kraken2DB, Kraken2DBReport, BrackenDB
 )
+
 from ._collators import collate_kraken2_reports, collate_kraken2_outputs
 from ._partitioners import partition_kraken2_reports, partition_kraken2_outputs
-
 
 __all__ = [
     'Kraken2ReportFormat', 'Kraken2ReportDirectoryFormat', 'Kraken2Reports',
