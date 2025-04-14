@@ -69,14 +69,14 @@ class Kraken2ReportFormat(model.TextFileFormat):
 
 
 class Kraken2ReportDirectoryFormat(model.DirectoryFormat, FileDictMixin):
-    pathspec = r'.+report\.(txt|tsv)$'
+    pathspec = r'.+\.report\.(txt|tsv)$'
     suffixes = ['.report']
     reports = model.FileCollection(pathspec, format=Kraken2ReportFormat)
 
     @reports.set_path_maker
     def reports_path_maker(self, sample_id, mag_id=None):
-        prefix = f'{sample_id}/{mag_id}_' if mag_id else f'{sample_id}/'
-        return f'{prefix}report.txt'
+        prefix = f'{sample_id}/{mag_id}' if mag_id else sample_id
+        return f'{prefix}.report.txt'
 
 
 class Kraken2DBReportFormat(Kraken2ReportFormat):
@@ -148,14 +148,14 @@ class Kraken2OutputFormat(model.TextFileFormat):
 
 
 class Kraken2OutputDirectoryFormat(model.DirectoryFormat, FileDictMixin):
-    pathspec = r'.+output\.(txt|tsv)$'
+    pathspec = r'.+\.output\.(txt|tsv)$'
     suffixes = ['.output']
-    reports = model.FileCollection(pathspec, format=Kraken2OutputFormat)
+    outputs = model.FileCollection(pathspec, format=Kraken2OutputFormat)
 
-    @reports.set_path_maker
-    def reports_path_maker(self, sample_id, mag_id=None):
-        prefix = f'{sample_id}/{mag_id}_' if mag_id else f'{sample_id}/'
-        return f'{prefix}output.txt'
+    @outputs.set_path_maker
+    def outputs_path_maker(self, sample_id, mag_id=None):
+        prefix = f'{sample_id}/{mag_id}' if mag_id else sample_id
+        return f'{prefix}.output.txt'
 
 
 class Kraken2DBFormat(model.TextFileFormat):
