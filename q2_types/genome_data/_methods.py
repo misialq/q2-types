@@ -16,35 +16,35 @@ import numpy as np
 import skbio
 from qiime2.util import duplicate
 
+from q2_types._util import _collate_helper
 from q2_types.feature_data import DNAIterator, DNAFASTAFormat
-from q2_types.genome_data import (SeedOrthologDirFmt, OrthologAnnotationDirFmt,
-                                  LociDirectoryFormat,
-                                  GenomeSequencesDirectoryFormat)
+from q2_types.genome_data import (
+    SeedOrthologDirFmt, OrthologAnnotationDirFmt, LociDirectoryFormat,
+    GenomeSequencesDirectoryFormat, GenesDirectoryFormat,
+    ProteinsDirectoryFormat
+)
 
 
 def collate_loci(loci: LociDirectoryFormat) -> LociDirectoryFormat:
-    """
-    Collate the individual loci directories from the partitions.
-    Parameters:
-    - loci: A list of LociDirectoryFormat containing the gff files.
-    Returns:
-    - collated_loci: A LociDirectoryFormat object containing the
-    collated gff files.
-    """
-    collated_loci = LociDirectoryFormat()
-    for loci_dir in loci:
-        for fp in loci_dir.path.iterdir():
-            try:
-                duplicate(
-                    fp,
-                    collated_loci.path / os.path.basename(fp)
-                )
-            except FileExistsError:
-                warnings.warn(
-                    f"Skipping {fp}. File already exists "
-                    f"in the destination directory."
-                )
-    return collated_loci
+    return _collate_helper(dir_fmts=loci)
+
+
+def collate_ortholog_annotations(
+    ortholog_annotations: OrthologAnnotationDirFmt
+) -> OrthologAnnotationDirFmt:
+    return _collate_helper(dir_fmts=ortholog_annotations)
+
+
+def collate_genes(
+        genes: GenesDirectoryFormat
+) -> GenesDirectoryFormat:
+    return _collate_helper(dir_fmts=genes)
+
+
+def collate_proteins(
+        proteins: ProteinsDirectoryFormat
+) -> ProteinsDirectoryFormat:
+    return _collate_helper(dir_fmts=proteins)
 
 
 def collate_orthologs(orthologs: SeedOrthologDirFmt) -> SeedOrthologDirFmt:
@@ -104,20 +104,6 @@ def partition_orthologs(
             partitioned_orthologs[i] = result
 
     return partitioned_orthologs
-
-
-def collate_ortholog_annotations(
-    ortholog_annotations: OrthologAnnotationDirFmt
-) -> OrthologAnnotationDirFmt:
-    # Init output
-    collated_annotations = OrthologAnnotationDirFmt()
-
-    # Copy annotations into output
-    for anno in ortholog_annotations:
-        for fp in anno.path.iterdir():
-            duplicate(fp, collated_annotations.path / fp.name)
-
-    return collated_annotations
 
 
 def collate_genomes(
