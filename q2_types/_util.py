@@ -7,16 +7,21 @@
 # ----------------------------------------------------------------------------
 import gzip
 import itertools
+import os
 import re
 import warnings
 from collections import defaultdict
-from typing import List
+from typing import List, TypeVar
 
+import numpy as np
 import skbio
 import pandas as pd
 
 import qiime2.plugin.model as model
 from qiime2.plugin import ValidationError
+from qiime2.util import duplicate
+
+DirFmt = TypeVar("DirFmt", bound=model.DirectoryFormat)
 
 
 def read_from_fasta(path, constructor=skbio.DNA, lowercase=False):
@@ -233,3 +238,102 @@ class FileDictMixin:
             else path.absolute()
         )
         return str(processed_path), _id
+
+
+def _duplicate_with_warning(src, dst):
+    try:
+        duplicate(src, dst)
+    except FileExistsError:
+        warnings.warn(
+            f"Skipping {src}. File already "
+            f"exists in the destination directory."
+        )
+
+
+def _collate_helper(dir_fmts: List[DirFmt]) -> DirFmt:
+    """
+    Iterates through a list of directory formats, merging their contents
+    into a single directory. Can be used with per sample directories and
+    without. Handles duplicate files by issuing warnings when conflicts occur.
+
+    Parameters:
+        dir_fmts (iterable):
+            A List of directory format objects to be collated.
+
+    Returns:
+        object:
+            The updated `collated` directory format object containing all
+            merged files and subdirectories.
+    """
+    # Initialize the collated directory format with the same class as inputs
+    collated = dir_fmts[0].__class__()
+
+    for dir_fmt in dir_fmts:
+        for item in dir_fmt.path.iterdir():
+            target = collated.path / item.name
+            # Per sample directories
+            if item.is_dir():
+                target.mkdir(exist_ok=True)
+                for file in item.iterdir():
+                    _duplicate_with_warning(file, target / file.name)
+            # Non per sample directories
+            else:
+                _duplicate_with_warning(
+                    item, collated.path / os.path.basename(item)
+                )
+    return collated
+
+
+def partition_dir_format(dir_format: DirFmt, num_partitions: int = None):
+    """
+    This function splits the file dictionary of the given directory format into
+    a specified number of partitions. For each partition, a new instance of the
+    same directory format class is created and populated with the corresponding
+    files. If the values in the file dictionary are nested dictionaries,
+    subdirectories are created in the partition to preserve structure.
+
+    Parameters:
+        dir_format (qiime2.plugin.model.DirectoryFormat):
+            The directory format object containing files to partition.
+        num_partitions (int):
+            The number of partitions to split the files into. If None, the
+            function will partition by samples if applicable else by file.
+
+    Returns:
+        dict:
+            A dictionary mapping either partition indices or, if each
+            partition contains only a single sample/file, the corresponding
+            IDs, to new directory format instances containing the partitioned
+            files.
+    """
+    partitioned = {}
+    all = [{k: v} for k, v in dir_format.file_dict().items()]
+
+    num_partitions = _validate_num_partitions(
+        len(all), num_partitions, "sample"
+    )
+
+    arrays = np.array_split(all, num_partitions)
+
+    for i, samples in enumerate(arrays, 1):
+        result = dir_format.__class__()
+
+        for dict in samples:
+            if isinstance(next(iter(dict.values())), str):
+                for _id, fp in dict.items():
+                    duplicate(fp, result.path / os.path.basename(fp))
+            else:
+                for _id, feature_dict in dict.items():
+                    for fp in feature_dict.values():
+                        os.makedirs(result.path / _id, exist_ok=True)
+                        duplicate(
+                            fp,
+                            result.path / _id / os.path.basename(fp)
+                        )
+
+        if num_partitions == len(all):
+            partitioned[_id] = result
+        else:
+            partitioned[i] = result
+
+    return partitioned

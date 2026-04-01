@@ -6,14 +6,20 @@
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 import os
+import warnings
 from pathlib import Path
+from typing import TypeVar
 
+from q2_types.genome_data import GenesDirectoryFormat
 from q2_types.kraken2 import Kraken2OutputDirectoryFormat
 from qiime2.plugin import model
 from qiime2.plugin.testing import TestPluginBase
 
-from q2_types._util import _validate_num_partitions, _validate_mag_ids, \
-    FileDictMixin
+from q2_types._util import (
+    _validate_num_partitions, _validate_mag_ids, FileDictMixin,
+    _duplicate_with_warning, partition_dir_format
+)
+DirFmt = TypeVar("DirFmt", bound=model.DirectoryFormat)
 
 
 class TestUtil(TestPluginBase):
@@ -52,6 +58,19 @@ class TestUtil(TestPluginBase):
                 6,
                 [(0, "a"), (0, "a"), (0, "c"), (0, "d"), (0, "e"), (0, "f")]
             )
+
+    def test_duplicate_warning(self):
+        tmpdir = self.temp_dir.name
+        src = os.path.join(tmpdir, "file.txt")
+        dst = os.path.join(tmpdir, "file_copy.txt")
+        with open(src, "w"), open(dst, "w"):
+            pass
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _duplicate_with_warning(src, dst)
+
+            self.assertIn("File already exists", str(w[-1].message))
 
 
 class TestFileDictMixin(TestPluginBase):
@@ -174,3 +193,47 @@ class TestFileDictMixin(TestPluginBase):
 
         self.assertEqual(result_id, "sample_id")
         self.assertEqual(result_path, str(path.absolute()))
+
+    def test_partition_helper_genes_samples(self):
+        path = self.get_data_path("genes_samples")
+        genes = GenesDirectoryFormat(path=path, mode="r")
+        obs = partition_dir_format(dir_format=genes)
+        self.assertTrue(os.path.exists(
+            obs["sample1"].path / "sample1" / "genes1.fa")
+        )
+        self.assertTrue(os.path.exists(
+            obs["sample2"].path / "sample2" / "genes2.fa")
+        )
+
+    def test_partition_helper_genes(self):
+        path = self.get_data_path("genes")
+        genes = GenesDirectoryFormat(path=path, mode="r")
+        obs = partition_dir_format(dir_format=genes)
+        self.assertTrue(os.path.exists(
+            obs["genes1"].path / "genes1.fa")
+        )
+        self.assertTrue(os.path.exists(
+            obs["genes2"].path / "genes2.fa")
+        )
+
+    def test_partition_helper_genes_samples_1_partition(self):
+        path = self.get_data_path("genes_samples")
+        genes = GenesDirectoryFormat(path=path, mode="r")
+        obs = partition_dir_format(dir_format=genes, num_partitions=1)
+        self.assertTrue(os.path.exists(
+            obs[1].path / "sample1" / "genes1.fa")
+        )
+        self.assertTrue(os.path.exists(
+            obs[1].path / "sample2" / "genes2.fa")
+        )
+
+    def test_partition_helper_genes_1_partition(self):
+        path = self.get_data_path("genes")
+        genes = GenesDirectoryFormat(path=path, mode="r")
+        obs = partition_dir_format(dir_format=genes, num_partitions=1)
+        self.assertTrue(os.path.exists(
+            obs[1].path / "genes1.fa")
+        )
+        self.assertTrue(os.path.exists(
+            obs[1].path / "genes2.fa")
+        )

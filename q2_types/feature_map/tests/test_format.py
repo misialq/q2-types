@@ -10,7 +10,7 @@ import unittest
 from qiime2.core.exceptions import ValidationError
 from qiime2.plugin.testing import TestPluginBase
 
-from q2_types.feature_map import MAGtoContigsFormat
+from q2_types.feature_map import MAGtoContigsFormat, FeatureMapFormat
 
 
 class TestFormats(TestPluginBase):
@@ -50,6 +50,43 @@ class TestFormats(TestPluginBase):
         with self.assertRaisesRegex(
             ValidationError,
             'MAG "6232c7e1-8ed7-47c8-9bdb-b94706a26931" is empty.',
+        ):
+            fmt.validate(level="max")
+
+    def test_feature_map_valid_min(self):
+        fp = self.get_data_path("feature-map-valid.jsonl")
+        fmt = FeatureMapFormat(fp, mode="r")
+        fmt.validate(level="min")
+
+    def test_feature_map_valid_max(self):
+        fp = self.get_data_path("feature-map-valid.jsonl")
+        fmt = FeatureMapFormat(fp, mode="r")
+        fmt.validate(level="max")
+
+    def test_feature_map_has_invalid_values(self):
+        fp = self.get_data_path("feature-map-invalid-values.jsonl")
+        fmt = FeatureMapFormat(fp, mode="r")
+        with self.assertRaisesRegex(
+            ValidationError,
+            "Found <class \'str\'> for feature 'taxon2'.",
+        ):
+            fmt.validate(level="max")
+
+    def test_feature_map_has_no_contigs(self):
+        fp = self.get_data_path("feature-map-empty-list.jsonl")
+        fmt = FeatureMapFormat(fp, mode="r")
+        with self.assertRaisesRegex(
+            ValidationError,
+            "feature 'taxon2' is empty.",
+        ):
+            fmt.validate(level="max")
+
+    def test_feature_map_has_duplicated_id(self):
+        fp = self.get_data_path("feature-map-duplicated.jsonl")
+        fmt = FeatureMapFormat(fp, mode="r")
+        with self.assertRaisesRegex(
+            ValidationError,
+            'Duplicate feature ID: taxon1',
         ):
             fmt.validate(level="max")
 

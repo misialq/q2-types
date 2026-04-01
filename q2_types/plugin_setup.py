@@ -20,14 +20,17 @@ from q2_types import __version__
 
 from q2_types.feature_data_mag import MAG
 import q2_types.kraken2
-from q2_types.per_sample_sequences import (MAGs,
-                                           JoinedSequencesWithQuality,
-                                           SequencesWithQuality,
-                                           PairedEndSequencesWithQuality,
-                                           Contigs)
+from q2_types.per_sample_sequences import (
+    MAGs, JoinedSequencesWithQuality, SequencesWithQuality,
+    PairedEndSequencesWithQuality, Contigs
+)
 from q2_types.feature_data import FeatureData, Sequence
-from q2_types.genome_data import Orthologs, GenomeData, NOG, Loci, DNASequence
-from q2_types.genome_data._methods import collate_loci
+from q2_types.genome_data import (
+    Orthologs, GenomeData, NOG, Loci, DNASequence, Genes, Proteins
+)
+from q2_types.genome_data._methods import (
+    collate_loci, collate_genes, collate_proteins
+)
 from q2_types.sample_data import SampleData
 from q2_types.kraken2 import Kraken2Reports, Kraken2Outputs
 
@@ -210,6 +213,30 @@ plugin.methods.register_function(
                 "and collates them into a single artifact.",
 )
 
+plugin.methods.register_function(
+    function=collate_genes,
+    inputs={"genes": List[GenomeData[Genes]]},
+    parameters={},
+    outputs={"collated_genes": GenomeData[Genes]},
+    input_descriptions={"genes": "A collection of genes to be collated."},
+    name="Collate genes",
+    description="Takes a collection of GenomeData[Genes]'s "
+                "and collates them into a single artifact.",
+)
+
+plugin.methods.register_function(
+    function=collate_proteins,
+    inputs={"proteins": List[GenomeData[Proteins]]},
+    parameters={},
+    outputs={"collated_proteins": GenomeData[Proteins]},
+    input_descriptions={
+        "proteins": "A collection of proteins to be collated."
+    },
+    name="Collate proteins",
+    description="Takes a collection of GenomeData[Proteins] "
+                "and collates them into a single artifact.",
+)
+
 KRAKEN2_REPORTS = TypeMatch([
     SampleData[Kraken2Reports % Properties('reads')],
     SampleData[Kraken2Reports % Properties('contigs')],
@@ -376,6 +403,54 @@ plugin.methods.register_function(
     description="This method converts a list of FeatureData[Sequence] or a "
                 "list of GenomeData[DNASequence] to a GenomeData[DNASequence] "
                 "artifact.",
+)
+
+plugin.methods.register_function(
+    function=q2_types.genome_data.partition_genes,
+    inputs={"genes": GenomeData[Genes]},
+    parameters={"num_partitions": Int % Range(1, None)},
+    outputs={"partitioned_genes": Collection[GenomeData[Genes]]},
+    input_descriptions={"genes": "The genes to partition."},
+    parameter_descriptions={
+        "num_partitions": "The number of partitions to split the genes"
+        " into. Defaults to partitioning into individual"
+        " genes."
+    },
+    name="Partition genes",
+    description="Partition a GenomeData[Genes] artifact into smaller "
+                "artifacts containing subsets of the genes",
+)
+
+plugin.methods.register_function(
+    function=q2_types.genome_data.partition_proteins,
+    inputs={"proteins": GenomeData[Proteins]},
+    parameters={"num_partitions": Int % Range(1, None)},
+    outputs={"partitioned_proteins": Collection[GenomeData[Proteins]]},
+    input_descriptions={"proteins": "The proteins to partition."},
+    parameter_descriptions={
+        "num_partitions": "The number of partitions to split the proteins"
+        " into. Defaults to partitioning into individual"
+        " proteins."
+    },
+    name="Partition proteins",
+    description="Partition a GenomeData[Proteins] artifact into smaller "
+                "artifacts containing subsets of the proteins",
+)
+
+plugin.methods.register_function(
+    function=q2_types.genome_data.partition_loci,
+    inputs={"loci": GenomeData[Loci]},
+    parameters={"num_partitions": Int % Range(1, None)},
+    outputs={"partitioned_loci": Collection[GenomeData[Loci]]},
+    input_descriptions={"loci": "The loci to partition."},
+    parameter_descriptions={
+        "num_partitions": "The number of partitions to split the loci"
+        " into. Defaults to partitioning into individual"
+        " loci."
+    },
+    name="Partition loci",
+    description="Partition a GenomeData[Loci] artifact into smaller "
+                "artifacts containing subsets of the loci",
 )
 
 importlib.import_module('q2_types.bowtie2._deferred_setup')

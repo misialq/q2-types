@@ -35,6 +35,8 @@ from q2_types.feature_data import (
 )
 from qiime2.plugin.testing import TestPluginBase
 from qiime2.plugin import ValidationError
+from qiime2.core.exceptions import RachisWarning
+from qiime2.sdk.result import Artifact
 
 
 class TestTaxonomyFormats(TestPluginBase):
@@ -48,7 +50,6 @@ class TestTaxonomyFormats(TestPluginBase):
 
         for filepath in filepaths:
             format = TaxonomyFormat(filepath, mode='r')
-
             format.validate()
 
     def test_taxonomy_format_validate_negative(self):
@@ -115,6 +116,31 @@ class TestTaxonomyFormats(TestPluginBase):
                                                       mode='r')
 
         format.validate()
+
+    def test_tsv_taxonomy_format_warnings(self):
+        '''
+        Tests that the taxonomic depth of one and trailing semicolon warnings
+        are raised under the proper conditions.
+        '''
+        filepath = self.get_data_path(
+            os.path.join('taxonomy', 'one-depth.tsv')
+        )
+        format = TSVTaxonomyFormat(filepath, mode='r')
+
+        with self.assertWarnsRegex(
+            RachisWarning, 'Importing taxonomy with taxonomic depth of one.'
+        ):
+            Artifact.import_data('FeatureData[Taxonomy]', format)
+
+        filepath = self.get_data_path(
+            os.path.join('taxonomy', 'trailing-semicolon.tsv')
+        )
+        format = TSVTaxonomyFormat(filepath, mode='r')
+
+        with self.assertWarnsRegex(
+            RachisWarning, 'Importing taxonomy with a trailing semicolon.'
+        ):
+            Artifact.import_data('FeatureData[Taxonomy]', format)
 
     def test_tsv_taxonomy_format_validate_positive(self):
         filenames = ['2-column.tsv', '3-column.tsv', 'valid-but-messy.tsv',

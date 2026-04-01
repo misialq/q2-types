@@ -602,6 +602,22 @@ class TestFormats(TestPluginBase):
                                     'Missing one or more files.*MANIFEST'):
             format.validate()
 
+    def test_validate_pe_overlap_sample_ids_positive(self):
+        filenames = \
+         ('paired_end_data_overlapping_ids/sample_5_S771_L001_R1_001.fastq.gz',
+          'paired_end_data_overlapping_ids/sample_5_S771_L001_R2_001.fastq.gz',
+          'paired_end_data_overlapping_ids/sample_51_S26_L001_R1_001.fastq.gz',
+          'paired_end_data_overlapping_ids/sample_51_S26_L001_R2_001.fastq.gz',
+          'paired_end_data_overlapping_ids/MANIFEST', 'metadata.yml')
+
+        for filename in filenames:
+            filepath = self.get_data_path(filename)
+            shutil.copy(filepath, self.temp_dir.name)
+
+        format = SingleLanePerSamplePairedEndFastqDirFmt(
+            self.temp_dir.name, mode='r')
+        format.validate()
+
 
 class TestQIIME1DemuxFormat(TestPluginBase):
     package = 'q2_types.per_sample_sequences.tests'
@@ -842,6 +858,13 @@ class TestMultiFormats(TestPluginBase):
 
         format.validate()
 
+        file_dict = format.file_dict(relative=True)
+
+        assert file_dict == {
+            "sample1": "sample1.bam",
+            "sample2": "sample2.bam",
+        }
+
     @patch('subprocess.run', return_value=Mock(returncode=3))
     def test_bam_dirmt_invalid(self, p):
         # this patch is not ideal but samtools' installation sometimes can
@@ -860,6 +883,19 @@ class TestMultiFormats(TestPluginBase):
         format = MultiBAMDirFmt(filepath, mode='r')
 
         format.validate()
+
+        file_dict = format.file_dict(relative=True)
+
+        assert file_dict == {
+            "sample1": {
+                "map1": "sample1/map1.bam",
+                "map2": "sample1/map2.bam",
+            },
+            "sample2": {
+                "map1": "sample2/map1.bam",
+                "map2": "sample2/map2.bam",
+            },
+        }
 
 
 if __name__ == "__main__":

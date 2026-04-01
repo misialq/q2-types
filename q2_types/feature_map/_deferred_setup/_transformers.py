@@ -8,7 +8,7 @@
 
 import json
 
-from .. import MAGtoContigsFormat
+from .. import MAGtoContigsFormat, FeatureMapFormat
 
 from ...plugin_setup import plugin
 
@@ -25,4 +25,23 @@ def _2(data: dict) -> MAGtoContigsFormat:
     fp = MAGtoContigsFormat()
     with fp.open() as fh:
         json.dump(data, fh)
+    return fp
+
+
+@plugin.register_transformer
+def _3(fp: FeatureMapFormat) -> dict:
+    data = {}
+    with fp.open() as fh:
+        for line in fh:
+            feature = json.loads(line)
+            data[feature["name"]] = feature["members"]
+    return data
+
+
+@plugin.register_transformer
+def _4(data: dict) -> FeatureMapFormat:
+    fp = FeatureMapFormat()
+    with fp.open() as fh:
+        for k, v in data.items():
+            fh.write(json.dumps({"name": k, "members": v}) + "\n")
     return fp

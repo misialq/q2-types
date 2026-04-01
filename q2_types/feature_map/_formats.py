@@ -47,3 +47,50 @@ class MAGtoContigsFormat(model.TextFileFormat):
 MAGtoContigsDirFmt = model.SingleFileDirectoryFormat(
     "MAGtoContigsDirFmt", "mag-to-contigs.json", MAGtoContigsFormat
 )
+
+
+class FeatureMapFormat(model.TextFileFormat):
+    def _validate_(self, level):
+        level_map = {"min": 1, "max": float("inf")}
+
+        feature_map = {}
+        with self.path.open("r") as fh:
+            for i, line in enumerate(fh):
+                if i > level_map[level]:
+                    break
+
+                try:
+                    data = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    raise ValidationError(f"Invalid JSONL file: {self.path}")
+
+                feature_id = data["name"]
+                members = data["members"]
+
+                if feature_id in feature_map:
+                    raise ValidationError(
+                        f"Duplicate feature ID: {feature_id}"
+                    )
+
+                if not isinstance(members, list):
+                    raise ValidationError(
+                        f"Values corresponding to feature IDs must be lists "
+                        f"of member features. Found {type(members)} for "
+                        f"feature '{feature_id}'."
+                    )
+
+                if len(members) == 0:
+                    raise ValidationError(
+                        "Only non-empty feature members are allowed. The "
+                        f"list of members for feature '{feature_id}' "
+                        "is empty."
+                    )
+
+                feature_map[feature_id] = members
+
+
+FeatureMapDirFmt = model.SingleFileDirectoryFormat(
+    "FeatureMapDirFmt",
+    "feature-map.json",
+    FeatureMapFormat
+)
