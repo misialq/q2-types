@@ -654,7 +654,7 @@ class MultiBowtie2IndexDirFmt(MultiDirValidationMixin, Bowtie2IndexDirFmt):
 
 
 class ContigSequencesDirFmt(model.DirectoryFormat):
-    pathspec = r'[^\.].+(?:_contigs)?.(fasta|fa)$'
+    pathspec = r'[^\.].+.(fasta|fa)$'
 
     sequences = model.FileCollection(pathspec, format=DNAFASTAFormat)
 
