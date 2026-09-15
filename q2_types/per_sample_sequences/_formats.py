@@ -654,13 +654,13 @@ class MultiBowtie2IndexDirFmt(MultiDirValidationMixin, Bowtie2IndexDirFmt):
 
 
 class ContigSequencesDirFmt(model.DirectoryFormat):
-    pathspec = r'[^\.].+_contigs.(fasta|fa)$'
+    pathspec = r'[^\.].+(?:_contigs)?.(fasta|fa)$'
 
     sequences = model.FileCollection(pathspec, format=DNAFASTAFormat)
 
     @sequences.set_path_maker
     def sequences_path_maker(self, sample_id):
-        return r'%s_contigs.fasta' % sample_id
+        return r'%s.fasta' % sample_id
 
     def sample_dict(self, relative=False):
         '''
@@ -685,14 +685,18 @@ class ContigSequencesDirFmt(model.DirectoryFormat):
             if not contigs_pattern.match(path.name):
                 continue
 
-            id = path.name.rsplit('_contigs', 1)[0]
+            if "_contigs" not in path.name:
+                # for backward-compatibility
+                _id = path.stem
+            else:
+                _id = path.name.rsplit('_contigs', 1)[0]
             absolute_path = path.absolute()
             if relative:
-                ids[id] = str(
+                ids[_id] = str(
                     absolute_path.relative_to(self.path.absolute())
                 )
             else:
-                ids[id] = str(absolute_path)
+                ids[_id] = str(absolute_path)
 
         return dict(sorted(ids.items()))
 
