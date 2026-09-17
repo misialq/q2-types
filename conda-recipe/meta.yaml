@@ -21,7 +21,7 @@ requirements:
   - biom-format {{ biom_format }}
   - ijson
   - h5py
-  - qiime2 >={{ qiime2 }}
+  - rachis >={{ rachis }}
   - samtools
   - pyhmmer
   - frictionless {{ frictionless }}
@@ -34,7 +34,7 @@ test:
   - py.test --pyargs q2_types
   requires:
   - pytest
-  - qiime2 >={{ qiime2 }}
+  - rachis >={{ rachis }}
   imports:
   - q2_types
   - qiime2.plugins.types
