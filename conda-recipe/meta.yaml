@@ -37,7 +37,7 @@ test:
   - rachis >={{ rachis }}
   imports:
   - q2_types
-  - qiime2.plugins.types
+  - rachis.plugins.types
 about:
   home: https://qiime2.org
   license: BSD-3-Clause
