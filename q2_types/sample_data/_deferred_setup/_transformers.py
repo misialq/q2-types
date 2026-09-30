@@ -22,10 +22,13 @@ def _read_alpha_diversity(fh):
     df = pd.read_csv(fh, sep='\t', header=0, dtype=object)
     df.set_index(df.columns[0], drop=True, append=False, inplace=True)
     df.index.name = None
-    # casting of columns adapted from SO post:
-    # https://stackoverflow.com/a/36814203/3424666
-    cols = df.columns
-    df[cols] = df[cols].apply(pd.to_numeric, errors='ignore')
+
+    def _to_numeric(col):
+        try:
+            return pd.to_numeric(col)
+        except ValueError:
+            return col
+    df = df.apply(_to_numeric)
     return df
 
 

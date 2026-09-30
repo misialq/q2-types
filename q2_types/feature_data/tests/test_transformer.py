@@ -19,18 +19,19 @@ import skbio
 import qiime2
 from qiime2.plugin.testing import TestPluginBase
 
+from q2_types._util import read_from_fasta
 from q2_types.feature_table import BIOMV210Format
 from q2_types.feature_data import (
     TaxonomyFormat, HeaderlessTSVTaxonomyFormat, TSVTaxonomyFormat,
-    DNAFASTAFormat, DNAIterator, PairedDNAIterator,
-    ProteinIterator, AlignedProteinIterator,
+    FASTAFormat, DNAFASTAFormat, LinkedDNAFASTAFormat, DNAIterator,
+    PairedDNAIterator, ProteinIterator, AlignedProteinIterator,
     PairedDNASequencesDirectoryFormat, AlignedDNAFASTAFormat,
     DifferentialFormat, AlignedDNAIterator, ProteinFASTAFormat,
     AlignedProteinFASTAFormat, RNAFASTAFormat, AlignedRNAFASTAFormat,
     RNAIterator, AlignedRNAIterator, BLAST6Format, MixedCaseDNAFASTAFormat,
     MixedCaseRNAFASTAFormat, MixedCaseAlignedDNAFASTAFormat,
     MixedCaseAlignedRNAFASTAFormat,
-    SequenceCharacteristicsFormat
+    SequenceCharacteristicsFormat, ImportanceFormat, LinkedDNA,
 )
 from q2_types.feature_data._deferred_setup._transformers import (
     _taxonomy_formats_to_dataframe, _dataframe_to_tsv_taxonomy_format,
@@ -562,6 +563,181 @@ class TestDNAFASTAFormatTransformers(TestPluginBase):
 
         for act, exp in zip(obs, input):
             self.assertEqual(act, exp)
+
+    def test_dna_fasta_format_to_fasta_format(self):
+        transformer = self.get_transformer(DNAFASTAFormat, FASTAFormat)
+        filepath = self.get_data_path('dna-sequences.fasta')
+        input = DNAFASTAFormat(filepath, mode='r')
+
+        obs = transformer(input)
+
+        self.assertIsInstance(obs, FASTAFormat)
+        obs.validate()
+        self.assertTrue(filecmp.cmp(str(input), str(obs), shallow=False))
+
+    def test_linked_dna_fasta_format_to_dna_iterator(self):
+        filepath = os.path.join(self.temp_dir.name, 'linked-dna.fasta')
+        with open(filepath, 'w') as fh:
+            fh.write('>id1\n')
+            fh.write('ACGT ACGT\n')
+            fh.write('>id2\n')
+            fh.write('ACGT\n')
+
+        transformer = self.get_transformer(LinkedDNAFASTAFormat, DNAIterator)
+        obs = list(transformer(LinkedDNAFASTAFormat(filepath, mode='r')))
+
+        self.assertEqual([seq.metadata['id'] for seq in obs], ['id1', 'id2'])
+        self.assertEqual([str(seq) for seq in obs], ['ACGT ACGT', 'ACGT'])
+        self.assertTrue(all(type(seq) is LinkedDNA for seq in obs))
+
+    def test_dna_iterator_to_linked_dna_fasta_format(self):
+        transformer = self.get_transformer(DNAIterator, LinkedDNAFASTAFormat)
+        input = DNAIterator(iter([
+            skbio.Sequence('ACGT ACGT', metadata={'id': 'id1'}),
+            skbio.Sequence('ACGT', metadata={'id': 'id2'}),
+        ]))
+
+        obs = transformer(input)
+        self.assertIsInstance(obs, LinkedDNAFASTAFormat)
+
+        reread = list(
+            read_from_fasta(str(obs), LinkedDNA, keep_spaces=True)
+        )
+
+        self.assertEqual(
+            [seq.metadata['id'] for seq in reread], ['id1', 'id2']
+        )
+        self.assertEqual([str(seq) for seq in reread], ['ACGT ACGT', 'ACGT'])
+
+    def test_linked_dna_write_roundtrip_preserves_spaces(self):
+        filepath = os.path.join(self.temp_dir.name, 'linked-dna.fasta')
+        input = LinkedDNA('ACGT ACGT', metadata={'id': 'id1'})
+
+        with open(filepath, 'w') as fh:
+            skbio.io.write(input, format='fasta', into=fh)
+
+        obs = list(read_from_fasta(filepath, LinkedDNA, keep_spaces=True))
+
+        self.assertEqual([seq.metadata['id'] for seq in obs], ['id1'])
+        self.assertEqual([str(seq) for seq in obs], ['ACGT ACGT'])
+
+    def test_linked_dna_fasta_format_to_fasta_format(self):
+        transformer = self.get_transformer(LinkedDNAFASTAFormat, FASTAFormat)
+        filepath = os.path.join(self.temp_dir.name, 'linked-dna.fasta')
+        with open(filepath, 'w') as fh:
+            fh.write('>id1\n')
+            fh.write('ACGT ACGT\n')
+            fh.write('>id2\n')
+            fh.write('ACGT\n')
+        input = LinkedDNAFASTAFormat(filepath, mode='r')
+
+        obs = transformer(input)
+
+        self.assertIsInstance(obs, FASTAFormat)
+        obs.validate()
+        self.assertTrue(filecmp.cmp(str(input), str(obs), shallow=False))
+
+    def test_linked_dna_nucleotide_methods(self):
+        seq = LinkedDNA('ACGN ACGT', metadata={'id': 'id1'})
+
+        complement = seq.complement()
+        reverse_complement = seq.reverse_complement()
+
+        self.assertIs(type(complement), LinkedDNA)
+        self.assertIs(type(reverse_complement), LinkedDNA)
+        self.assertEqual(str(complement), 'TGCN TGCA')
+        self.assertEqual(str(reverse_complement), 'ACGT NCGT')
+        self.assertEqual(seq.gc_frequency(), 4)
+        with self.assertRaisesRegex(TypeError, 'different semantics'):
+            seq.gc_frequency(relative=True)
+        with self.assertRaisesRegex(TypeError, 'different semantics'):
+            seq.gc_content()
+
+    def test_linked_dna_grammared_sequence_methods(self):
+        seq = LinkedDNA('ACGN ACGT', metadata={'id': 'id1'})
+
+        self.assertTrue(seq.has_definites())
+        self.assertTrue(seq.has_degenerates())
+        self.assertEqual(
+            seq.definites().tolist(),
+            [True, True, True, False, False, True, True, True, True]
+        )
+        self.assertEqual(
+            seq.degenerates().tolist(),
+            [False, False, False, True, False, False, False, False, False]
+        )
+        self.assertEqual(
+            seq.nondegenerates().tolist(),
+            [True, True, True, False, False, True, True, True, True]
+        )
+
+        regex = seq.to_regex()
+        self.assertIsNotNone(regex.fullmatch('ACGA ACGT'))
+        self.assertIsNotNone(regex.fullmatch('ACGC ACGT'))
+        self.assertIsNone(regex.fullmatch('ACGX ACGT'))
+
+        expansions = list(seq.expand_degenerates())
+        self.assertTrue(all(type(seq) is LinkedDNA for seq in expansions))
+        self.assertCountEqual(
+            [str(seq) for seq in expansions],
+            ['ACGT ACGT', 'ACGC ACGT', 'ACGG ACGT', 'ACGA ACGT']
+        )
+
+    def test_linked_dnafasta_format_to_series(self):
+        '''
+        Tests the LinkedDNAFASTAFormat -> pd.Series transformation.
+        '''
+        filepath = os.path.join(self.temp_dir.name, 'linked-dna.fasta')
+        with open(filepath, 'w') as fh:
+            fh.write('>id1\n')
+            fh.write('ACGT ACGT\n')
+            fh.write('>id2\n')
+            fh.write('ACGT\n')
+
+        transformer = self.get_transformer(LinkedDNAFASTAFormat, pd.Series)
+        obs = transformer(LinkedDNAFASTAFormat(filepath, mode='r')).astype(str)
+
+        index = pd.Index(['id1', 'id2'])
+        exp = pd.Series(['ACGT ACGT', 'ACGT'], index=index, dtype=object)
+
+        assert_series_equal(exp, obs)
+
+    def test_series_to_linked_dnafasta_format(self):
+        '''
+        Tests the pd.Series -> LinkedDNAFASTAFormat transformation.
+        '''
+        transformer = self.get_transformer(pd.Series, LinkedDNAFASTAFormat)
+
+        index = pd.Index(['id1', 'id2'])
+        input = pd.Series(['ACGT ACGT', 'ACGT'], index=index, dtype=object)
+        obs = transformer(input)
+
+        self.assertIsInstance(obs, LinkedDNAFASTAFormat)
+        reread = list(
+            read_from_fasta(str(obs), LinkedDNA, keep_spaces=True)
+        )
+        self.assertEqual(
+            [seq.metadata['id'] for seq in reread], ['id1', 'id2']
+        )
+        self.assertEqual([str(seq) for seq in reread], ['ACGT ACGT', 'ACGT'])
+
+    def test_linked_dnafasta_format_with_duplicate_ids_to_series(self):
+        '''
+        Ensures that when transforming from LinkedDNAFASTAFormat to pd.Series,
+        if a duplicate ID is detected an error is raised.
+        '''
+        filepath = os.path.join(
+            self.temp_dir.name, 'linked-duplicate-ids.fasta'
+        )
+        with open(filepath, 'w') as fh:
+            fh.write('>id1\n')
+            fh.write('ACGT ACGT\n')
+            fh.write('>id1\n')
+            fh.write('ACGT\n')
+
+        transformer = self.get_transformer(LinkedDNAFASTAFormat, pd.Series)
+        with self.assertRaisesRegex(ValueError, 'unique.*id1'):
+            transformer(LinkedDNAFASTAFormat(filepath, mode='r'))
 
     def test_aln_dna_fasta_format_to_aln_dna_iterator(self):
         filename = 'aligned-dna-sequences.fasta'
@@ -1599,6 +1775,49 @@ class TestSequenceCharacteristicsTransformer(TestPluginBase):
         self.exp_df['length'] = self.exp_df['length'].astype('float64')
 
         assert_frame_equal(obs.to_dataframe(), self.exp_df)
+
+
+class TestImportanceFormatTransformers(TestPluginBase):
+    package = 'q2_types.feature_data.tests'
+
+    def test_pd_dataframe_to_importance_format(self):
+        transformer = self.get_transformer(pd.DataFrame, ImportanceFormat)
+        exp = pd.DataFrame([1, 2, 3, 4],
+                           columns=['importance'], index=['a', 'b', 'c', 'd'])
+        obs = transformer(exp)
+        obs = pd.read_csv(str(obs), sep='\t', header=0, index_col=0)
+
+        assert_frame_equal(exp, obs)
+
+    def test_importance_format_to_pd_dataframe(self):
+        _, obs = self.transform_format(
+            ImportanceFormat, pd.DataFrame, 'importance.tsv')
+        exp_index = pd.Index(['74ec9fe6ffab4ecff6d5def74298a825',
+                              'c82032c40c98975f71892e4be561c87a',
+                              '79280cea51a6fe8a3432b2f266dd34db',
+                              'f7686a74ca2d3729eb66305e8a26309b'],
+                             name='id')
+        exp = pd.DataFrame([0.44469828320835586, 0.07760118417569697,
+                            0.06570251750505914, 0.061718558716901406],
+                           columns=['importance'],
+                           index=exp_index)
+
+        assert_frame_equal(exp, obs[:4])
+
+    def test_importance_format_to_metadata(self):
+        _, obs = self.transform_format(
+            ImportanceFormat, qiime2.Metadata, 'importance.tsv')
+        exp_index = pd.Index(['74ec9fe6ffab4ecff6d5def74298a825',
+                              'c82032c40c98975f71892e4be561c87a',
+                              '79280cea51a6fe8a3432b2f266dd34db',
+                              'f7686a74ca2d3729eb66305e8a26309b'],
+                             name='id')
+        exp = pd.DataFrame([0.44469828320835586, 0.07760118417569697,
+                            0.06570251750505914, 0.061718558716901406],
+                           columns=['importance'],
+                           index=exp_index)
+
+        assert_frame_equal(obs.to_dataframe()[:4], exp)
 
 
 if __name__ == '__main__':

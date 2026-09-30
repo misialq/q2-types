@@ -14,7 +14,7 @@ from q2_types.feature_table import (FeatureTable, Frequency,
                                     RelativeFrequency, PercentileNormalized,
                                     Composition, Balance,
                                     PresenceAbsence, BIOMV210DirFmt, Design,
-                                    Normalized)
+                                    Normalized, Unconstrained)
 
 
 class TestTypes(TestPluginBase):
@@ -41,6 +41,9 @@ class TestTypes(TestPluginBase):
     def test_normalized_semantic_type_registration(self):
         self.assertRegisteredSemanticType(Normalized)
 
+    def test_unconstrained_semantic_type_registration(self):
+        self.assertRegisteredSemanticType(Unconstrained)
+
     def test_feature_table_semantic_type_to_v210_format_registration(self):
         self.assertSemanticTypeRegisteredToFormat(
             FeatureTable[Frequency],
@@ -65,6 +68,9 @@ class TestTypes(TestPluginBase):
             BIOMV210DirFmt)
         self.assertSemanticTypeRegisteredToFormat(
             FeatureTable[Normalized],
+            BIOMV210DirFmt)
+        self.assertSemanticTypeRegisteredToFormat(
+            FeatureTable[Unconstrained],
             BIOMV210DirFmt)
 
 

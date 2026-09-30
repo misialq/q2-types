@@ -162,15 +162,6 @@ class FASTAFormat(model.TextFileFormat):
             self.alphabet)
         self._validate_FASTA(level, FASTAValidator, ValidationSet)
 
-    def _validate_line_lengths(
-            self, seq_len, prev_seq_len, prev_seq_start_line):
-        if prev_seq_len != seq_len:
-            raise ValidationError('The sequence starting on line '
-                                  f'{prev_seq_start_line} was length '
-                                  f'{prev_seq_len}. All previous sequences '
-                                  f'were length {seq_len}. All sequences must '
-                                  'be the same length for AlignedFASTAFormat.')
-
     def _validate_FASTA(self, level, FASTAValidator=None, ValidationSet=None):
         last_line_was_ID = False
         ids = {}
@@ -184,6 +175,7 @@ class FASTAFormat(model.TextFileFormat):
 
         with self.path.open('rb') as fh:
             try:
+                num_seqs = 0
                 first = fh.read(6)
                 if first[:3] == b'\xEF\xBB\xBF':
                     first = first[3:]
@@ -205,6 +197,7 @@ class FASTAFormat(model.TextFileFormat):
                     line = line.decode('utf-8-sig')
 
                     if line.startswith('>'):
+                        num_seqs += 1
                         if FASTAValidator and ValidationSet:
                             if seq_len == 0:
                                 seq_len = prev_seq_len
@@ -267,7 +260,7 @@ class FASTAFormat(model.TextFileFormat):
                 raise ValidationError(f'utf-8 cannot decode byte on line '
                                       f'{line_number}') from e
 
-        if self.aligned:
+        if self.aligned and num_seqs > 1:
             self._validate_line_lengths(
                 seq_len, prev_seq_len, prev_seq_start_line)
 
@@ -276,6 +269,17 @@ class DNAFASTAFormat(FASTAFormat):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.alphabet = "ACGTRYKMSWBDHVN"
+
+
+class LinkedDNAFASTAFormat(DNAFASTAFormat):
+    '''
+    Linked sequences are paired end sequences that may contain a single
+    space between two unmerged read directions. A space is not a valid
+    FASTA character, so this format is technically not FASTA (fastalmost).
+    '''
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.alphabet += " "
 
 
 class AlignedFASTAFormatMixin:
@@ -295,6 +299,12 @@ class AlignedFASTAFormatMixin:
 
 DNASequencesDirectoryFormat = model.SingleFileDirectoryFormat(
     'DNASequencesDirectoryFormat', 'dna-sequences.fasta', DNAFASTAFormat)
+
+LinkedDNASequencesDirectoryFormat = model.SingleFileDirectoryFormat(
+    'LinkedDNASequencesDirectoryFormat',
+    'linked-dna-sequences.fasta',
+    LinkedDNAFASTAFormat
+)
 
 
 class MixedCaseDNAFASTAFormat(DNAFASTAFormat):
@@ -505,3 +515,50 @@ SequenceCharacteristicsDirectoryFormat = model.SingleFileDirectoryFormat(
     "SequenceCharacteristicsDirectoryFormat",
     "sequence_characteristics.tsv", SequenceCharacteristicsFormat
 )
+
+
+class ImportanceFormat(model.TextFileFormat):
+    def _validate(self, n_records=None):
+        """Validate rows with an identifier followed by numeric values."""
+        with self.open() as fh:
+            # The header is intentionally flexible because column names and
+            # counts can vary by estimator.
+            fh.readline()
+
+            has_data = False
+            for line_number, line in enumerate(fh, start=2):
+                # Strip each cell rather than the full line so empty cells are
+                # preserved and fail numeric validation.
+                cells = [c.strip() for c in line.split('\t')]
+                if len(cells) < 2:
+                    raise ValidationError(
+                        "Expected data record to be TSV with two or more "
+                        "fields. Detected {0} fields at line {1}:\n\n{2!r}"
+                        .format(len(cells), line_number, cells))
+
+                try:
+                    [float(c) for c in cells[1:]]
+                except ValueError:
+                    raise ValidationError(
+                        "Columns must contain only numeric values. "
+                        "A non-numeric value ({0!r}) was detected at line "
+                        "{1}.".format(cells[1], line_number))
+
+                has_data = True
+                if n_records is not None and (line_number - 1) >= n_records:
+                    break
+
+            if not has_data:
+                raise ValidationError(
+                    "There must be at least one data record present in the "
+                    "file in addition to the header line.")
+
+    def _validate_(self, level):
+        """Validate this format using QIIME 2's min or max validation level."""
+        record_count_map = {'min': 5, 'max': None}
+        self._validate(record_count_map[level])
+
+
+ImportanceDirectoryFormat = model.SingleFileDirectoryFormat(
+    'ImportanceDirectoryFormat', 'importance.tsv',
+    ImportanceFormat)

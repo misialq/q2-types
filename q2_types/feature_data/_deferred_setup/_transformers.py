@@ -7,28 +7,32 @@
 # ----------------------------------------------------------------------------
 
 from itertools import zip_longest
+import os
 
 import pandas as pd
 import biom
 import skbio
+import numpy as np
 
 import qiime2
+from qiime2.util import duplicate
 
 from q2_types.feature_table import BIOMV210Format
 from q2_types._util import fasta_to_series, read_from_fasta
 
 from .. import (
     TaxonomyFormat, HeaderlessTSVTaxonomyFormat, TSVTaxonomyFormat,
-    DNAFASTAFormat, PairedDNASequencesDirectoryFormat,
-    AlignedDNAFASTAFormat, DifferentialFormat, ProteinFASTAFormat,
+    FASTAFormat, DNAFASTAFormat, LinkedDNAFASTAFormat,
+    PairedDNASequencesDirectoryFormat, AlignedDNAFASTAFormat,
+    DifferentialFormat, ProteinFASTAFormat,
     AlignedProteinFASTAFormat, RNAFASTAFormat,
     AlignedRNAFASTAFormat, PairedRNASequencesDirectoryFormat,
     BLAST6Format, MixedCaseDNAFASTAFormat, MixedCaseRNAFASTAFormat,
     MixedCaseAlignedDNAFASTAFormat, MixedCaseAlignedRNAFASTAFormat,
-    SequenceCharacteristicsFormat,
+    SequenceCharacteristicsFormat, ImportanceFormat,
     DNAIterator, PairedDNAIterator, AlignedDNAIterator,
     ProteinIterator, AlignedProteinIterator, RNAIterator, AlignedRNAIterator,
-    PairedRNAIterator
+    PairedRNAIterator, LinkedDNA,
 )
 
 from ...plugin_setup import plugin
@@ -108,6 +112,14 @@ def _taxonomy_formats_to_dataframe(filepath, has_header=None):
 
 def _has_expected_header(df):
     return df.iloc[0].tolist()[:2] == TSVTaxonomyFormat.HEADER
+
+
+def _read_dataframe(fh):
+    """Read a TSV file into a dataframe with the first column as the index."""
+    df = pd.read_csv(fh, sep='\t', header=0, dtype='str')
+    df.set_index(df.columns[0], drop=True, append=False, inplace=True)
+    df.index.name = 'id'
+    return df
 
 
 def _dataframe_to_tsv_taxonomy_format(df):
@@ -243,6 +255,31 @@ def _29(ff: TSVTaxonomyFormat) -> qiime2.Metadata:
 
 
 @plugin.register_transformer
+def _dataframe_to_importance_format(data: pd.DataFrame) -> ImportanceFormat:
+    """Write feature importance values from a dataframe to TSV format."""
+    ff = ImportanceFormat()
+    with ff.open() as fh:
+        data.to_csv(fh, sep='\t', header=True, na_rep=np.nan)
+    return ff
+
+
+@plugin.register_transformer
+def _importance_format_to_dataframe(ff: ImportanceFormat) -> pd.DataFrame:
+    """Read feature importance TSV values into a numeric dataframe."""
+    with ff.open() as fh:
+        return _read_dataframe(fh).apply(
+            lambda x: pd.to_numeric(x, errors='raise'))
+
+
+@plugin.register_transformer
+def _importance_format_to_metadata(ff: ImportanceFormat) -> qiime2.Metadata:
+    """Read feature importance TSV values into QIIME 2 metadata."""
+    with ff.open() as fh:
+        return qiime2.Metadata(_read_dataframe(fh).apply(
+            lambda x: pd.to_numeric(x, errors='raise')))
+
+
+@plugin.register_transformer
 def _24(df: pd.DataFrame) -> TSVTaxonomyFormat:
     return _dataframe_to_tsv_taxonomy_format(df)
 
@@ -303,6 +340,13 @@ def _series_to_fasta_format(ff, data, sequence_type="DNA", lowercase=False):
 
 
 # DNA Transformers
+def _copy_to_fasta_format(ff):
+    result = FASTAFormat()
+    os.remove(str(result))
+    duplicate(str(ff), str(result))
+    return result
+
+
 @plugin.register_transformer
 def _9(ff: DNAFASTAFormat) -> DNAIterator:
     generator = read_from_fasta(str(ff), skbio.DNA)
@@ -313,6 +357,47 @@ def _9(ff: DNAFASTAFormat) -> DNAIterator:
 def _10(data: DNAIterator) -> DNAFASTAFormat:
     ff = DNAFASTAFormat()
     skbio.io.write(iter(data), format='fasta', into=str(ff))
+    return ff
+
+
+@plugin.register_transformer
+def _235(ff: DNAFASTAFormat) -> FASTAFormat:
+    return _copy_to_fasta_format(ff)
+
+
+@plugin.register_transformer
+def _231(ff: LinkedDNAFASTAFormat) -> DNAIterator:
+    generator = read_from_fasta(str(ff), LinkedDNA, keep_spaces=True)
+    return DNAIterator(generator)
+
+
+@plugin.register_transformer
+def _232(data: DNAIterator) -> LinkedDNAFASTAFormat:
+    ff = LinkedDNAFASTAFormat()
+    skbio.io.write(iter(data), format='fasta', into=str(ff))
+    return ff
+
+
+@plugin.register_transformer
+def _236(ff: LinkedDNAFASTAFormat) -> FASTAFormat:
+    return _copy_to_fasta_format(ff)
+
+
+@plugin.register_transformer
+def _233(ff: LinkedDNAFASTAFormat) -> pd.Series:
+    return fasta_to_series(ff, LinkedDNA, keep_spaces=True)
+
+
+@plugin.register_transformer
+def _234(data: pd.Series) -> LinkedDNAFASTAFormat:
+    ff = LinkedDNAFASTAFormat()
+    with ff.open() as fh:
+        for id_, seq in data.items():
+            sequence = LinkedDNA(
+                str(seq), metadata={'id': id_}, lowercase=False
+            )
+            skbio.io.write(sequence, format='fasta', into=fh)
+
     return ff
 
 

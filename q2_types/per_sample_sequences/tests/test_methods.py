@@ -9,6 +9,7 @@ import filecmp
 import os
 from unittest.mock import patch
 
+import pandas as pd
 from qiime2.plugin.testing import TestPluginBase
 
 from q2_types.per_sample_sequences import MultiMAGSequencesDirFmt, \
@@ -27,7 +28,7 @@ class TestSampleDataMAGsPartitionCollating(TestPluginBase):
         mock_validate_mag_ids
     ):
         # Partition mags
-        p = self.get_data_path("collated_mags")
+        p = self.get_data_path("collated_mags_numeric")
         mags = MultiMAGSequencesDirFmt(path=p, mode="r")
         mock_validate_num_partitions.return_value = 2
         partitioned_mags = partition_sample_data_mags(mags, 2)
@@ -43,15 +44,15 @@ class TestSampleDataMAGsPartitionCollating(TestPluginBase):
 
         # Compare dirs
         exp_partitions = [
-            ("sample1", mag_ids_sample_1), ("sample2", mag_ids_sample_2)
+            ("12345", mag_ids_sample_1), ("67890", mag_ids_sample_2)
         ]
-        for _id, mag_ids in exp_partitions:
+        for _id, mag_fns in exp_partitions:
             dircmp = filecmp.dircmp(
                 partitioned_mags[_id].path,
                 mags.path
             )
             self.assertListEqual(
-                ["MANIFEST", _id], dircmp.common
+                sorted(["MANIFEST", _id]), sorted(dircmp.common)
             )
             dircmp = filecmp.dircmp(
                 f"{partitioned_mags[_id].path}/{_id}",
@@ -59,9 +60,16 @@ class TestSampleDataMAGsPartitionCollating(TestPluginBase):
             )
             self.assertListEqual(
                 [
-                    *mag_ids,
+                    *mag_fns,
                 ],
                 dircmp.common
+            )
+            obs_manifest = pd.read_csv(
+                f"{partitioned_mags[_id].path}/MANIFEST", index_col=None
+            )
+            self.assertListEqual(
+                obs_manifest["mag-id"].to_list(),
+                [os.path.splitext(x)[0] for x in mag_fns]
             )
 
     def test_collate_sample_data_mags(self):
@@ -120,11 +128,11 @@ class TestSampleDataMAGsPartitionCollating(TestPluginBase):
         partitioned = partition_contigs(contigs, 2)
 
         self.assertTrue(
-            os.path.exists(partitioned[1].path / "sample1_contigs.fa"))
+            os.path.exists(partitioned[1].path / "sample1.fa"))
         self.assertTrue(
-            os.path.exists(partitioned[1].path / "sample2_contigs.fa"))
+            os.path.exists(partitioned[1].path / "sample2.fa"))
         self.assertTrue(
-            os.path.exists(partitioned[2].path / "sample3_contigs.fa"))
+            os.path.exists(partitioned[2].path / "sample3.fa"))
 
     @patch("q2_types._util._validate_num_partitions")
     def test_partition_sample_data_contigs(
@@ -136,11 +144,11 @@ class TestSampleDataMAGsPartitionCollating(TestPluginBase):
         partitioned = partition_contigs(contigs)
 
         self.assertTrue(
-            os.path.exists(partitioned["sample1"].path / "sample1_contigs.fa"))
+            os.path.exists(partitioned["sample1"].path / "sample1.fa"))
         self.assertTrue(
-            os.path.exists(partitioned["sample2"].path / "sample2_contigs.fa"))
+            os.path.exists(partitioned["sample2"].path / "sample2.fa"))
         self.assertTrue(
-            os.path.exists(partitioned["sample3"].path / "sample3_contigs.fa"))
+            os.path.exists(partitioned["sample3"].path / "sample3.fa"))
 
     def test_collate_sample_data_contigs(self,):
         p1 = self.get_data_path("contigs_partitioned/1")

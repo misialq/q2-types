@@ -12,6 +12,7 @@ from .. import (
     TaxonomyFormat, TaxonomyDirectoryFormat, HeaderlessTSVTaxonomyFormat,
     HeaderlessTSVTaxonomyDirectoryFormat, TSVTaxonomyFormat,
     TSVTaxonomyDirectoryFormat, DNAFASTAFormat, DNASequencesDirectoryFormat,
+    LinkedDNAFASTAFormat, LinkedDNASequencesDirectoryFormat,
     PairedDNASequencesDirectoryFormat, AlignedDNAFASTAFormat,
     AlignedDNASequencesDirectoryFormat, DifferentialFormat,
     DifferentialDirectoryFormat, FASTAFormat,
@@ -30,9 +31,12 @@ from .. import (
     MixedCaseAlignedRNASequencesDirectoryFormat,
     SequenceCharacteristicsDirectoryFormat,
     SequenceCharacteristicsFormat,
-    FeatureData, Taxonomy, Sequence, PairedEndSequence, AlignedSequence,
+    ImportanceFormat, ImportanceDirectoryFormat,
+    FeatureData, Taxonomy, Sequence, LinkedSequence, PairedEndSequence,
+    AlignedSequence,
     Differential, ProteinSequence, AlignedProteinSequence, RNASequence,
-    AlignedRNASequence, PairedEndRNASequence, BLAST6, SequenceCharacteristics)
+    AlignedRNASequence, PairedEndRNASequence, BLAST6,
+    SequenceCharacteristics, Importance)
 
 from ...plugin_setup import plugin
 
@@ -41,7 +45,8 @@ plugin.register_formats(
     TSVTaxonomyFormat, TSVTaxonomyDirectoryFormat,
     HeaderlessTSVTaxonomyFormat, HeaderlessTSVTaxonomyDirectoryFormat,
     TaxonomyFormat, TaxonomyDirectoryFormat, FASTAFormat, DNAFASTAFormat,
-    DNASequencesDirectoryFormat, PairedDNASequencesDirectoryFormat,
+    LinkedDNAFASTAFormat, DNASequencesDirectoryFormat,
+    LinkedDNASequencesDirectoryFormat, PairedDNASequencesDirectoryFormat,
     AlignedDNAFASTAFormat, AlignedDNASequencesDirectoryFormat,
     DifferentialFormat, DifferentialDirectoryFormat, ProteinFASTAFormat,
     AlignedProteinFASTAFormat, MixedCaseProteinFASTAFormat,
@@ -57,15 +62,17 @@ plugin.register_formats(
     MixedCaseAlignedDNASequencesDirectoryFormat,
     MixedCaseAlignedRNAFASTAFormat,
     MixedCaseAlignedRNASequencesDirectoryFormat, SequenceCharacteristicsFormat,
-    SequenceCharacteristicsDirectoryFormat
+    SequenceCharacteristicsDirectoryFormat, ImportanceFormat,
+    ImportanceDirectoryFormat
 )
 
 plugin.register_semantic_types(FeatureData, Taxonomy, Sequence,
+                               LinkedSequence,
                                PairedEndSequence, AlignedSequence,
                                Differential, ProteinSequence,
                                AlignedProteinSequence, RNASequence,
                                AlignedRNASequence, PairedEndRNASequence,
-                               BLAST6, SequenceCharacteristics)
+                               BLAST6, SequenceCharacteristics, Importance)
 
 plugin.register_artifact_class(
     FeatureData[Taxonomy],
@@ -85,6 +92,17 @@ plugin.register_artifact_class(
                  "feature identifier."))
 
 plugin.register_artifact_class(
+    FeatureData[LinkedSequence],
+    directory_format=LinkedDNASequencesDirectoryFormat,
+    description=(
+        "Unaligned DNA sequences associated with a set of feature "
+        "identifiers. Each sequence represents either a merged pair or an "
+        "unmerged pair of reads. Unmerged pairs have a single space "
+        "separating the forward and reverse reads."
+    )
+)
+
+plugin.register_artifact_class(
     FeatureData[RNASequence],
     directory_format=RNASequencesDirectoryFormat,
     description=("Unaligned RNA sequences associated with a set of feature "
@@ -93,7 +111,13 @@ plugin.register_artifact_class(
 
 plugin.register_artifact_class(
     FeatureData[PairedEndSequence],
-    directory_format=PairedDNASequencesDirectoryFormat)
+    directory_format=PairedDNASequencesDirectoryFormat,
+    description=(
+        "Unaligned DNA sequences associated with a set of feature "
+        "identifiers. One forward sequence and one reverse sequence is "
+        "associated with each feature identifier."
+    )
+)
 
 plugin.register_artifact_class(
     FeatureData[PairedEndRNASequence],
@@ -143,6 +167,12 @@ plugin.register_artifact_class(
     directory_format=SequenceCharacteristicsDirectoryFormat,
     description=("Characteristics of sequences (e.g., the length of a gene "
                  "in basepairs)."))
+
+plugin.register_artifact_class(
+    FeatureData[Importance],
+    directory_format=ImportanceDirectoryFormat,
+    description=("Numeric importance scores associated with a set of feature "
+                 "identifiers."))
 
 importlib.import_module('._transformers', __name__)
 importlib.import_module('._validators', __name__)

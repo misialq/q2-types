@@ -15,6 +15,7 @@ from q2_types.feature_data import (
     TaxonomyFormat, TaxonomyDirectoryFormat, HeaderlessTSVTaxonomyFormat,
     HeaderlessTSVTaxonomyDirectoryFormat, TSVTaxonomyFormat,
     TSVTaxonomyDirectoryFormat, DNAFASTAFormat, DNASequencesDirectoryFormat,
+    LinkedDNAFASTAFormat, LinkedDNASequencesDirectoryFormat,
     PairedDNASequencesDirectoryFormat, AlignedDNAFASTAFormat,
     AlignedDNASequencesDirectoryFormat, DifferentialDirectoryFormat,
     ProteinFASTAFormat, AlignedProteinFASTAFormat, FASTAFormat,
@@ -31,7 +32,8 @@ from q2_types.feature_data import (
     MixedCaseAlignedDNASequencesDirectoryFormat,
     MixedCaseAlignedRNAFASTAFormat,
     MixedCaseAlignedRNASequencesDirectoryFormat,
-    SequenceCharacteristicsDirectoryFormat, SequenceCharacteristicsFormat
+    SequenceCharacteristicsDirectoryFormat, SequenceCharacteristicsFormat,
+    ImportanceFormat, ImportanceDirectoryFormat
 )
 from qiime2.plugin.testing import TestPluginBase
 from qiime2.plugin import ValidationError
@@ -269,6 +271,44 @@ class TestNucleicAcidFASTAFormats(TestPluginBase):
                     os.path.join(self.temp_dir.name, 'dna-sequences.fasta'))
         format = DNASequencesDirectoryFormat(self.temp_dir.name, mode='r')
 
+        format.validate()
+
+    def test_linked_dna_fasta_format_validate_positive(self):
+        filepath = os.path.join(
+            self.temp_dir.name, 'linked-dna-sequences.fasta'
+        )
+        with open(filepath, 'w') as fh:
+            fh.write('>id1\n')
+            fh.write('ACGTACGT\n')
+            fh.write('>id2\n')
+            fh.write('ACGT ACGT\n')
+
+        format = LinkedDNAFASTAFormat(filepath, mode='r')
+        format.validate()
+
+    def test_linked_dna_fasta_format_invalid_characters(self):
+        filepath = os.path.join(self.temp_dir.name, 'linked-invalid.fasta')
+        with open(filepath, 'w') as fh:
+            fh.write('>id1\n')
+            fh.write('ACGT+ACGT\n')
+
+        format = LinkedDNAFASTAFormat(filepath, mode='r')
+        with self.assertRaisesRegex(
+            ValidationError, "Invalid character '\\+'"
+        ):
+            format.validate()
+
+    def test_linked_dna_sequences_directory_format(self):
+        filepath = os.path.join(
+            self.temp_dir.name, 'linked-dna-sequences.fasta'
+        )
+        with open(filepath, 'w') as fh:
+            fh.write('>id1\n')
+            fh.write('ACGT ACGT\n')
+
+        format = LinkedDNASequencesDirectoryFormat(
+            self.temp_dir.name, mode='r'
+        )
         format.validate()
 
     def test_dna_fasta_format_duplicate_ids(self):
@@ -779,6 +819,40 @@ class TestDifferentialFormat(TestPluginBase):
         with self.assertRaisesRegex(ValidationError, 'numeric'):
             format = DifferentialDirectoryFormat(temp_dir, mode='r')
             format.validate()
+
+
+class TestImportanceFormat(TestPluginBase):
+    package = 'q2_types.feature_data.tests'
+
+    def test_importance_format_validate_positive(self):
+        filepath = self.get_data_path('importance.tsv')
+        format = ImportanceFormat(filepath, mode='r')
+        format.validate(level='min')
+        format.validate()
+
+    def test_importance_format_validate_negative_nonnumeric(self):
+        filepath = self.get_data_path('chardonnay.map.txt')
+        format = ImportanceFormat(filepath, mode='r')
+        with self.assertRaisesRegex(ValidationError, 'numeric values'):
+            format.validate()
+
+    def test_importance_format_validate_negative_empty(self):
+        filepath = self.get_data_path('empty_file.txt')
+        format = ImportanceFormat(filepath, mode='r')
+        with self.assertRaisesRegex(ValidationError, 'one data record'):
+            format.validate()
+
+    def test_importance_format_validate_negative(self):
+        filepath = self.get_data_path('garbage.txt')
+        format = ImportanceFormat(filepath, mode='r')
+        with self.assertRaisesRegex(ValidationError, 'two or more fields'):
+            format.validate()
+
+    def test_importance_dir_fmt_validate_positive(self):
+        filepath = self.get_data_path('importance.tsv')
+        shutil.copy(filepath, self.temp_dir.name)
+        format = ImportanceDirectoryFormat(self.temp_dir.name, mode='r')
+        format.validate()
 
 
 class TestProteinFASTAFormats(TestPluginBase):
